@@ -214,6 +214,63 @@ docker run -d -p 5000:5000 \
 
 ---
 
+## Local development with minikube (plain process or Docker)
+
+For local development against a [minikube](https://minikube.sigs.k8s.io) cluster
+you do **not** need the ServiceAccount + `ClusterRole` + token extraction
+described in [Kubeconfig (external mode)](#kubeconfig-external-mode): your
+existing `minikube` kubeconfig user already authenticates with an embedded
+client certificate and holds admin-level privileges, which is a superset of the
+chart's `ClusterRole`. Just make sure the `minikube` context is active:
+
+```bash
+kubectl config current-context        # should print: minikube
+```
+
+### Plain process on the laptop
+
+Nothing special is required — `lib/k8s_client.py` falls back to
+`~/.kube/config` (and the current-context within it):
+
+```bash
+minikube status        # cluster must be running
+python manager/main.py
+```
+
+### Manager in Docker on the laptop
+
+The one real gotcha is the API-server address. A minikube kubeconfig typically
+points at `server: https://127.0.0.1:<port>`; inside a container `127.0.0.1`
+refers to the **container itself**, not your laptop, so the manager would fail
+to reach the cluster. Run the container on the **host network** so the loopback
+address resolves exactly as on the host:
+
+```bash
+docker build -t ghcr.io/<your-org>/hpc-pilot-manager:latest .
+
+docker run --rm --network host \
+  -e FLASK_SECRET_KEY="<strong-random-key>" \
+  -v ~/.kube/config:/root/.kube/config:ro \
+  -v $(pwd)/manager/pilot_config.yaml:/app/pilot_config.yaml:ro \
+  ghcr.io/<your-org>/hpc-pilot-manager:latest
+```
+
+Notes:
+
+- The `minikube` user's client certificate/key are embedded (base64) in the
+  kubeconfig itself, so mounting the single file is sufficient — no separate
+  cert mounts and no service-account token.
+- `-v ... :ro` mounts the kubeconfig read-only so the container cannot mutate
+  your real config.
+- Because `--network host` bypasses port mapping, publish the Flask port via
+  the host network directly (`FLASK_PORT`, default `5000`).
+- This setup is **convenient but not least-privilege**: the minikube user is an
+  admin, so RBAC misconfigurations in the manager will not surface locally.
+  Follow the [Production checklist](#production-checklist) and the scoped
+  ServiceAccount instructions when moving to a real cluster.
+
+---
+
 ## Helm CLI configuration
 
 The `helm` binary must be on `$PATH`. The manager inherits the process
