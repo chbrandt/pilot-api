@@ -9,18 +9,16 @@ All routes (except `/login` and `/logout`) are protected by the
 `require_login` decorator. Unauthenticated HTML requests are redirected to
 `/login`; AJAX/JSON requests get HTTP 401 with a JSON body.
 
-```{contents} Contents
-:local:
-:depth: 2
-```
-
 ---
 
 ## Authentication Routes (`app/auth.py`)
 
 ### `GET /login`
 
-Render the login page (token paste form).
+Render the login page: the token-paste form and, when `site.oidc` is
+configured, the **🎫 Log in with EGI Check-in** button (OAuth
+authorization-code flow — see
+[Authentication](authentication.md#egi-check-in-oauth-login-browser-flow)).
 
 **Query parameters:**
 
@@ -28,7 +26,7 @@ Render the login page (token paste form).
 |---|---|
 | `reason=expired` | Show "session expired" warning banner |
 | `refresh=1` | Show "update your token" banner instead of the normal title |
-| `next=<url>` | URL to redirect to after successful login |
+| `next=<url>` | URL to redirect to after successful login (also forwarded to the EGI Check-in button) |
 
 **Response:** `login.html`
 
@@ -60,19 +58,21 @@ On success the manager also:
 
 Start the EGI Check-in **OAuth 2.0 authorization-code flow** (GA4): redirect
 the user's browser to the Check-in (Keycloak) authorization endpoint with a
-random CSRF `state` (stored in the session).
+random CSRF `state` and a PKCE `code_challenge` (RFC 7636, S256), both
+stored in the session.
 
 Requires an OIDC client registered in EGI Check-in with
-`<site.hostname>/login/egi/callback` as an allowed redirect URI; configure
+`<site.hostname>/oauth/callback` as an allowed redirect URI; configure
 it under `site.oidc` in `pilot_config.yaml`:
 
 ```yaml
 site:
   oidc:
     client_id: hpc-pilot
-    client_secret: ""     # required only for confidential clients
+    client_secret: ""     # confidential clients — or set PILOT_OIDC_CLIENT_SECRET
     issuer: https://aai.egi.eu/auth/realms/egi
     redirect_uri: ""      # optional explicit override
+    # audience: ""        # optional: enforce the JWT 'aud' claim
 ```
 
 When `client_id` is not configured, the login page hides the "EGI Check-in"
@@ -83,13 +83,14 @@ button and this route redirects back to `GET /login` with an error.
 
 ---
 
-### `GET /login/egi/callback`
+### `GET /oauth/callback`
 
 Callback for the OAuth authorization-code flow. Verifies the `state`
-parameter (CSRF protection), exchanges the `code` for tokens at the IdP
-token endpoint, then establishes the session exactly like `POST /login`
-(validation, group check, namespace derivation, userspace ensure, config
-seeding).
+parameter (CSRF protection) and the `iss` parameter (RFC 9207, when
+present), then exchanges the `code` and the PKCE `code_verifier` for
+tokens at the IdP token endpoint, and establishes the session exactly like
+`POST /login` (validation, group check, namespace derivation, userspace
+ensure, config seeding).
 
 **Auth:** Public
 **Success:** Redirect to `next` (or `/`)

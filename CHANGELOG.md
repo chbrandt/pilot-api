@@ -7,6 +7,122 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.4.1] - 2026-10-13
+
+### Added
+
+- **MkDocs documentation site**: the `documentation/` pages are now built
+  with MkDocs + Material (`mkdocs.yml`); MyST-style code fences were
+  replaced with plain Markdown so every page renders correctly.
+
+### Fixed
+
+- **EGI Check-in OAuth login** (`GA4`): access tokens carrying an `aud`
+  claim (issued to OAuth clients by the browser login) failed validation
+  with "Invalid audience" — PyJWT requires an expected audience whenever
+  the claim is present, but none was supplied. Audience verification is
+  now opt-in via the new `site.oidc.audience` key (enforced consistently
+  by the web GUI and the REST API); by default the claim is not checked,
+  matching the historical token-paste behaviour.
+- **EGI Check-in OAuth login** (`GA4`): added PKCE (RFC 7636, S256) to the
+  authorization-code flow — Check-in realms reject authorization requests
+  without a `code_challenge`/`code_challenge_method` pair. The callback now
+  sends the `code_verifier` in the token exchange and verifies the RFC 9207
+  `iss` parameter (IdP mix-up protection); the authorize URL is properly
+  percent-encoded. Callback route renamed to `GET /oauth/callback`.
+
+### Security
+
+- **EGI Check-in OAuth login** (`GA4`): the OIDC `client_secret` can (and
+  should) be supplied via the `PILOT_OIDC_CLIENT_SECRET` environment
+  variable, which overrides `site.oidc.client_secret` when non-empty —
+  keeps the secret out of `pilot_config.yaml` and git (same pattern as
+  `FLASK_SECRET_KEY`).
+
+### Documentation
+
+- **EGI Check-in OAuth login** (`GA4`): documented the authorization-code
+  login in `documentation/authentication.md` (flow diagram, `site.oidc`
+  configuration, OIDC-client setup), with follow-up updates in
+  `configuration.md`, `deployment.md`, `api.md` and the README files;
+  noted that the `charts/manager` chart does not render `site.oidc` yet.
+
+## [v0.4] - 2026-09-18
+
+### Added
+
+- **Unified configuration** (`AA4`): `manager/pilot_config.yaml` (sections
+  `site`, `charts`, `hpc.nodes`) replaces `site_config.yaml`,
+  `charts_config.yaml` and `manager/hpc/*.yaml`; new `lib/config.py` loader
+  with configurable path resolution.
+- **`--config` flag** (`AA5`): `python main.py --config <path>` (or
+  `PILOT_CONFIG_PATH`) selects a custom configuration file.
+- **Userspace prune** (`US2`): `POST /api/userspace/prune` removes everything
+  for the user — best-effort per-node InterLink uninstall and HPC edge
+  undeploy, then namespace deletion — with a per-node status report.
+- **Prune button** (`GA6`): "Prune everything" on the Manage Nodes page
+  (confirmation dialog) wired to a `POST /hpc/nodes/prune` GUI route.
+- **Start/Stop Node** (`GA8`, `GA9`, `GA10`): `POST /hpc/nodes/{start,stop}`
+  combine the HPC and InterLink operations in one click, with a
+  spinning-wheel indicator and aggregated deployment/stopping logs.
+- **Pod-spec jobs** (`JT4`): `POST /api/jobs/spec` creates a job from the
+  `spec` field of a Pod manifest, injecting the InterLink toleration when
+  missing.
+- **CPU / memory resources** (`JT2`, `GA2`): `POST /api/jobs/preset` accepts
+  `cpu`/`memory` (Kubernetes quantities); the Submit Job form forwards them.
+- **EGI Check-in OAuth login** (`GA4`): "Log in with EGI Check-in" button
+  implementing the authorization-code flow against `aai.egi.eu` (Keycloak),
+  with CSRF state verification; configurable via `site.oidc`.
+- **Home landing page** (`GA1`): `GET /` lists the user's jobs and their
+  interlink/HPC nodes; the Submit Job form moved to `GET /submit`.
+- **Health endpoint** (`AA2`): public `GET /health` returning
+  `{"status": "Service alive"}`.
+- **API Docs link** (`GA11`): navbar button opening the Swagger UI in a new
+  tab.
+- **`GET /api/interlink/nodes`** (`IT2`): renamed from
+  `/api/nodes/interlink`, grouped under the interLink resource namespace.
+
+### Changed
+
+- **Jobs API** (`JT3`): job creation moved to `POST /api/jobs/preset`
+  (`GET /api/jobs` still lists jobs).
+- **Node-name validation** (`JT1`): `node_name` is validated against the
+  InterLink virtual-kubelet nodes deployed in the cluster.
+- **Per-(user, HPC node) InterLink releases** (`AA3`, `IT1`): release
+  `interlink-<hpc_name>-<user_hash>`, virtual-kubelet node
+  `vk-<hpc_name>-<user_hash>`.
+- **HPC status is a GET** (`HT1`): `/api/hpc/status` now takes `hpc_name`
+  as a query parameter.
+- **InterLink chart hardening**: deploy with `virtualNode.disableCSR` so job
+  output works with `--kubelet-insecure-tls`; `approve_pending_csrs` matches
+  the exact node-name ServiceAccount.
+- **Manager Helm chart** version pinned to SemVer (`version: 0.2.0`,
+  `appVersion: 0.4.0`).
+
+### Fixed
+
+- **Jobs page shows only jobs** (`GA12`): InterLink releases/nodes are no
+  longer rendered as jobs.
+- **Userspace teardown** (`US1`): ClusterRole grants the `delete` verb on
+  namespaces so `DELETE /api/userspace/` succeeds.
+- **Conflicting wstunnel services**: the wstunnel secret and ingress path
+  prefix are scoped per (user, HPC) pair as `<namespace>/<hpc_name>` (the
+  `__SECRET__` chart placeholder replaces `__NAMESPACE__`), so
+  virtual-kubelet services for different HPC targets no longer collide.
+
+### Removed
+
+- **`POST /api/namespaces/ensure`** (`AA1`): superseded by
+  `POST/DELETE /api/userspace/`.
+- **Save feature** (`GA5`): removed the save route/button for HPC and
+  Helm/interLink deployments.
+- **Redundant chart values** (`HC1`): wstunnel ingress host/ports are derived
+  from `siteConfig`; the secret is the per-(user, HPC) `<namespace>/<hpc_name>`
+  used as the ingress path prefix; the Ingress TLS host list comes from
+  `siteConfig.hostname`.
+- Obsolete templates `helm.html`, `hpc.html`, `releases.html`,
+  `helm_result.html`.
+
 ## [v0.3.10] - 2026-09-03
 
 ### Added
@@ -56,5 +172,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed the now-unused templates `helm.html`, `hpc.html`, `releases.html` and
   `helm_result.html`.
 
-[Unreleased]: https://github.com/chbrandt/hpc_pilot/compare/v0.3.10...HEAD
+[Unreleased]: https://github.com/chbrandt/hpc_pilot/compare/v0.4.1...HEAD
+[v0.4.1]: https://github.com/chbrandt/hpc_pilot/compare/v0.4...v0.4.1
+[v0.4]: https://github.com/chbrandt/hpc_pilot/compare/v0.3.10...v0.4
 [v0.3.10]: https://github.com/chbrandt/hpc_pilot/compare/v0.3.9...v0.3.10
