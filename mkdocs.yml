@@ -3,6 +3,15 @@ site_url: https://chbrandt.github.io/hpc_pilot
 repo_url: https://github.com/chbrandt/hpc_pilot
 docs_dir: documentation
 
+# Enable Mermaid.js diagrams (C4 model under documentation/c4/).
+# mkdocs-material renders ```mermaid blocks via pymdownx.superfences.
+markdown_extensions:
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
 theme: 
   name: material
   font:
