@@ -1,6 +1,6 @@
 # Web UI Routes
 
-The **web GUI layer** (`manager/app/`) renders HTML pages in the browser. It is a
+The **web GUI layer** (`server/app/`) renders HTML pages in the browser. It is a
 thin client over the [REST API](rest_api.md): every backend operation goes
 through `app/api_client.py`, which forwards the session's Bearer token to the
 `/api` endpoints over HTTP (loopback by default).
@@ -239,7 +239,7 @@ using the user's session token.
 
 Render the "Manage Nodes" page — the single place to manage HPC nodes and
 their InterLink virtual-kubelet deployments. For every configured HPC node
-(from `manager/hpc/*.yaml`) the page shows connection details, HPC-side
+(from `server/hpc/*.yaml`) the page shows connection details, HPC-side
 actions (deploy/status/start/stop) and the InterLink release state
 (`interlink-<hpc_name>`, checked via `GET /api/interlink?hpc_name=<name>`).
 

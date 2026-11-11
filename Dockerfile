@@ -1,7 +1,7 @@
 FROM python:3.11-slim AS base
 
-LABEL org.opencontainers.image.title="HPC Pilot Manager"
-LABEL org.opencontainers.image.description="Flask manager app for HPC Pilot"
+LABEL org.opencontainers.image.title="Pilot API"
+LABEL org.opencontainers.image.description="REST API service for HPC Pilot (Flask + Swagger UI)"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         curl \
@@ -14,7 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-COPY manager/. .
+COPY server/. .
 
 RUN pip install --no-cache-dir -r requirements.txt
 

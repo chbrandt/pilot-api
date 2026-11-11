@@ -130,7 +130,7 @@ OAuth callback.
    registration) with `https://<site.hostname>/oauth/callback` as an
    allowed redirect URI. PKCE (S256) is always used — Check-in realms
    reject authorization requests without it.
-2. Configure the client in `manager/pilot_config.yaml`:
+2. Configure the client in `server/pilot_config.yaml`:
 
 ```yaml
 site:
@@ -157,7 +157,7 @@ and [Configuration — `site` section](configuration.md#site-section).
 > render an `oidc:` block into its generated `pilot_config.yaml`, so
 > in-cluster deployments cannot enable the button through chart values.
 > Provide the `site.oidc` section via your own config file (or extend
-> [`charts/manager/templates/configmap-pilot.yaml`](../charts/manager/templates/configmap-pilot.yaml)).
+> [`charts/manager/templates/configmap-pilot.yaml`](https://github.com/chbrandt/pilot-deploy/tree/main/charts/manager/templates/configmap-pilot.yaml)).
 
 ---
 
@@ -273,12 +273,12 @@ default cookie-based session backend. The encryption key is `FLASK_SECRET_KEY`.
 
 ### Option 2 — Device Code Flow
 
-The `manager/lib/token_checkin.py` script in this repo implements the OAuth 2.0
+The `server/lib/token_checkin.py` script in this repo implements the OAuth 2.0
 Device Authorization Grant against EGI Check-in (using the public client
 `oidc-agent`):
 
 ```bash
-python manager/lib/token_checkin.py new
+python server/lib/token_checkin.py new
 # Follow the printed URL, authenticate in your browser, then read the
 # access token from the printed tokens file.
 ```

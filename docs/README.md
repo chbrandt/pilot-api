@@ -1,50 +1,51 @@
-# HPC Pilot — Web Application
+# HPC Pilot — Pilot API
 
-HPC Pilot is a Flask web application for deploying **HPC jobs** (container
-workloads forwarded to HPC batch systems via
-[interLink](https://interlink-project.dev)) and managing per-user InterLink
-pods in a Kubernetes cluster. It authenticates users via
-[EGI Check-in](https://www.egi.eu/service/check-in/) — either by pasting an
-access token or, when `site.oidc` is configured, with the browser-based
-**🎫 Log in with EGI Check-in** button (OAuth 2.0 authorization-code flow) —
-and every authenticated user gets their own isolated Kubernetes namespace.
+HPC Pilot deploys **HPC jobs** (container workloads forwarded to HPC batch
+systems via [interLink](https://interlink-project.dev)) and per-user
+InterLink pods in a Kubernetes cluster, authenticating users via
+[EGI Check-in](https://www.egi.eu/service/check-in/). Since the `pilot-*`
+split it is composed of three repositories:
 
-The manager can run **outside** the cluster (local dev, VM) or **inside** the
-cluster as a Kubernetes Deployment managed by the
-[`charts/manager/`](../charts/manager/) Helm chart.
+| Repository | Role |
+|---|---|
+| **pilot-api** (this repo) | REST API server — all Kubernetes / Helm / HPC / Check-in logic |
+| [pilot-app](https://github.com/chbrandt/pilot-app) | Web GUI — a pure HTTP client of this API |
+| [pilot-deploy](https://github.com/chbrandt/pilot-deploy) | Helm charts and docker/deployment recipes |
 
----
+Every authenticated user gets their own isolated Kubernetes namespace.
+Tokens are validated on the API side — the GUI never handles JWTs or
+secrets.
 
-## Features
+## Features (API side)
 
 | Feature | Description |
 | --- | --- |
-| **Job submission** | Form-driven submission of container jobs pinned to InterLink virtual-kubelet nodes (InterLink forwards them to HPC batch jobs) |
-| **InterLink deployment** | Deploy InterLink virtual-kubelet nodes (wstunnel server + virtual-kubelet), one per (user, HPC node) pair, with per-user placeholder resolution from the `charts` section of `pilot_config.yaml` |
-| **HPC node management** | Install/start/stop/status/uninstall the wstunnel client + supervisord + InterLink plugin on a remote HPC edge-node via `mccli` |
-| **Unified workloads view** | Single page listing container jobs and the InterLink Helm release |
-| **EGI Check-in auth** | Token-paste and OAuth browser login (GA4); user namespace derived deterministically from the `sub` claim |
-| **User isolation** | Each user can only see and delete workloads in their own namespace |
-| **Token expiry handling** | Navbar expiry countdown; auto-logout on expiry; one-click token refresh |
-| **Saved configs** | Per-user store of reusable job / release templates, seeded with defaults on first login |
+| **Job submission** | `POST /api/jobs/preset`, `POST /api/jobs/spec` — container jobs pinned to InterLink virtual-kubelet nodes |
+| **InterLink deployment** | `POST/GET/DELETE /api/interlink` — one release per (user, HPC node) pair |
+| **HPC node management** | `/api/hpc/*` — install/start/stop/status/uninstall the wstunnel client + supervisord + InterLink plugin on a remote HPC edge-node via `mccli` |
+| **Userspace lifecycle** | `POST/DELETE /api/userspace/`, `POST /api/userspace/prune` |
+| **Saved configs** | Per-user store of reusable job / chart templates, seeded on first login (`/api/saved`, `/api/saved/seed`) |
+| **Public site metadata** | `GET /api/site` — display-safe site configuration for remote clients |
+| **Login endpoints** | `POST /api/auth/verify`, `POST /api/auth/oidc/exchange` — let the GUI log in without any local JWT/secret handling |
+| **Auth** | EGI Check-in Bearer tokens; user namespace derived deterministically from the `sub` claim |
 
 ---
 
 ## Architecture
 
-HPC Pilot is built in three layers under `manager/`:
-
 ```
-manager/
+server/
 ├── lib/       # Pure Python business logic (importable from CLI)
 ├── api/       # JSON REST API under /api   (cURL / HTTP clients)
-├── app/       # HTML web GUI under /       (browser)
-├── main.py    # Flask application entry point (wires lib+api+app into a single WSGI app)
+├── hpc/       # Runtime templates shipped to the HPC edge-node
+├── k8s/       # In-cluster fixtures
+├── main.py    # Flask application entry point (wires lib+api)
 └── pilot_config.yaml # Unified config: site, default charts, HPC nodes
 ```
 
-See [Architecture](architecture.md) for the full component diagram and request
-lifecycle.
+See [Architecture](architecture.md) for the component diagram and request
+lifecycle, and the [pilot-app repository](https://github.com/chbrandt/pilot-app)
+for the GUI side.
 
 ---
 
@@ -55,154 +56,40 @@ lifecycle.
 | Python ≥ 3.9 | Tested with 3.11 / 3.12 |
 | `helm` CLI (v3) | Must be on `$PATH`; used for chart operations |
 | `kubectl` access | Via `KUBECONFIG` or `~/.kube/config` (or in-cluster ServiceAccount) |
-| EGI Check-in access token | For the token-paste login — an access token obtained from EGI Check-in (e.g. via the `lib/token_checkin.py` helper); alternatively configure `site.oidc` and use the 🎫 browser login |
-| `pilot_config.yaml` (`site`) | Operator-level settings (hostname, wstunnel ports, allowed_groups) |
-| `pilot_config.yaml` (`charts`) | Default charts seeded to each user on first login |
-| `mccli` + `flaat-userinfo` | **Only for HPC operations** — `mccli` wraps SSH with OIDC token auth; install with `pip install mccli` |
+| EGI Check-in access token | For token-paste login (see the `lib/token_checkin.py` helper); alternatively configure `site.oidc` and let the GUI use the browser button |
+| `pilot_config.yaml` | Operator-level settings (`site`), default charts (`charts`), HPC nodes (`hpc.nodes`) |
+| `mccli` + `flaat-userinfo` | **Only for HPC operations** — install with `pip install mccli` (bundled in the Docker image) |
 
 ---
 
-## Quick Start
-
-### 1. Install Python dependencies
+## Quick start
 
 ```bash
-cd manager/
+cd server/
 pip install -r requirements.txt
+
+# Configure the site: edit the `site` section of pilot_config.yaml
+# (hostname, wstunnel.port, wstunnel.local_port)
+
+export KUBECONFIG=/path/to/your/kubeconfig   # optional
+python main.py            # → http://localhost:5000 (Swagger UI at /api/docs)
 ```
 
-### 2. Configure the site
-
-Edit the `site` section of `manager/pilot_config.yaml` to set the manager's
-public hostname and wstunnel ports. No wildcard DNS or wildcard TLS
-certificate is required — every user's wstunnel endpoint is reached through
-a path prefix (`<hostname>/<user-namespace>`) on this single hostname, not a
-per-user subdomain:
-
-```yaml
-# manager/pilot_config.yaml
-site:
-  hostname: your-cluster.example.com
-  wstunnel:
-    port: 80
-    local_port: 4000
-```
-
-### 4. Configure HPC nodes (optional)
-
-Add one entry per HPC site under the `hpc.nodes` section of
-`manager/pilot_config.yaml` (`hostname`, `ssh_port`, `plugin`). See
-[configuration.md](configuration.md#hpc-section-hpc-node-connection-details).
-
-### 5. Configure access to the cluster
+Then run the GUI against it (from a pilot-app checkout):
 
 ```bash
-export KUBECONFIG=/path/to/your/kubeconfig
+API_BASE_URL=http://localhost:5000 python main.py
 ```
-
-Or place your kubeconfig at `~/.kube/config` (the default). When running
-in-cluster (via the Helm chart) the pod uses its ServiceAccount token instead.
-
-### 6. Set a secret key
-
-```bash
-export FLASK_SECRET_KEY="$(python -c 'import secrets; print(secrets.token_hex(32))')"
-```
-
-### 7. Run
-
-```bash
-python main.py
-```
-
-The app listens on `http://0.0.0.0:5000` by default. A browseable Swagger UI
-for the REST API is served at **`/api/docs`**.
 
 ---
 
-## Environment Variables
+## Further reading
 
-| Variable | Default | Description |
-| --- | --- | --- |
-| `KUBECONFIG` | `~/.kube/config` | Path to kubeconfig file |
-| `FLASK_SECRET_KEY` | `dev-secret-change-in-production` | Session encryption key — **change in production** |
-| `FLASK_PORT` | `5000` | TCP port to listen on |
-| `FLASK_DEBUG` | `0` | Set to `1` to enable Flask debug mode |
-| `API_BASE_URL` | `http://localhost:5000` | Base URL of the REST API as seen from the GUI layer (set to split GUI/API processes) |
-
----
-
-## File Structure
-
-```
-manager/
-├── main.py               # Flask application entry point (wires lib+api+app)
-├── pilot_config.yaml      # Unified config: site, default charts, HPC nodes
-├── requirements.txt       # Python dependencies
-├── api/                   # JSON REST API under /api (blueprints)
-│   ├── auth.py            # Bearer-token validation (require_token decorator)
-│   ├── k8s.py             # Job REST API
-│   ├── helm.py            # InterLink chart REST API
-│   ├── hpc.py             # HPC node REST API
-│   ├── saved.py           # Saved configs REST API
-│   ├── docs.py            # Swagger / OpenAPI spec endpoint
-│   ├── site_config.py     # Site configuration loader (delegates to lib.config)
-│   └── openapi.yaml       # OpenAPI 3.1 specification
-├── app/                   # HTML web GUI under / (blueprints + templates)
-│   ├── auth.py            # Login/logout route handlers
-│   ├── k8s.py             # Job route handlers
-│   ├── helm.py            # Deprecated InterLink redirects (merged into hpc.py)
-│   ├── hpc.py             # HPC node + InterLink "Manage Nodes" route handlers
-│   ├── saved.py           # Saved config route handlers
-│   ├── api_client.py      # Internal HTTP client for calling the REST API
-│   ├── static/
-│   │   └── style.css      # All CSS
-│   └── templates/
-│       ├── base.html      # Navbar, flash messages, token countdown JS
-│       ├── login.html     # Log-in page
-│       ├── index.html     # Submit Job form
-│       ├── nodes.html     # Manage Nodes: HPC + InterLink per HPC target
-│       ├── deployments.html # Unified workloads table
-│       ├── status.html    # Post-submit status / polling page
-│       └── hpc_result.html  # HPC action result page
-├── lib/                   # Pure Python business logic (importable from CLI)
-│   ├── config.py          # Unified pilot_config.yaml loader (site/charts/hpc)
-│   ├── k8s_client.py      # Kubernetes API wrapper (jobs + namespaces)
-│   ├── helm_client.py     # Helm CLI wrapper
-│   ├── hpc_client.py      # mccli/SSH HPC deployment client
-│   ├── hpc_config.py      # Per-HPC-node config loader (reads hpc.nodes via lib.config)
-│   ├── token_auth.py      # EGI Check-in JWT/JWKS validation, namespace derivation
-│   ├── token_checkin.py   # EGI Check-in device-flow CLI helper
-│   └── saved_deployments.py # Saved deployment configurations + seeding
-├── pilot_config.yaml      # Unified config: site, default charts, HPC nodes
-├── hpc/                   # HPC edge-node setup assets (not configuration)
-│   ├── pilot/
-│   │   ├── setup.sh                    # (deprecated) legacy setup script
-│   │   ├── supervisord.conf.jinja     # supervisord config template
-│   │   ├── supervisord-wstunnel.conf.jinja
-│   │   └── supervisord-interlink.conf.jinja
-│   └── plugins/
-│       ├── echo/InterLinkConfig.yaml
-│       ├── docker/InterLinkConfig.yaml
-│       └── slurm/InterLinkConfig.yaml
-├── k8s/                   # Kubernetes-side configuration
-│   └── pilot/wstunnel.conf
-└── data/                  # Runtime data (per-user saved configs, JSON)
-```
-
-> `templates/pods.html` and `templates/container.html` are legacy templates
-> kept in the tree but not referenced by any current route.
-
----
-
-## Further Reading
-
-- [**Deployment Guide**](deployment.md) — build the image, install the Helm chart, connect InterLink and the HPC edge-node end-to-end
+- [**Deployment Guide**](deployment.md) — build both images, install the Helm chart (pilot-deploy), connect InterLink and the HPC edge-node end-to-end
 - [Architecture](architecture.md) — component diagram and request lifecycle
 - [Authentication](authentication.md) — EGI Check-in token-paste and OAuth browser login flows
-- [Web UI Routes](api.md) — all Flask GUI routes
 - [REST API Reference](rest_api.md) — REST API endpoints (also at `/api/docs`)
-- [Python Library](lib.md) — pure-Python package `lib`
+- [Python Library](lib.md) — the pure-Python `lib` package
 - [Kubernetes Integration](kubernetes.md) — resources created, RBAC
 - [Helm Integration](helm.md) — the InterLink chart and `helm_client`
 - [Configuration](configuration.md) — all environment variables, kubeconfig, RBAC, production setup

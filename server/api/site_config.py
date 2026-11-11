@@ -13,6 +13,7 @@ that needs it (only the generic ``lib.config`` loader parses the file).
 """
 
 import logging
+import os
 from typing import Optional
 
 from lib.config import get_site_config
@@ -57,4 +58,24 @@ def load_oidc_audience() -> Optional[str]:
         return None
     audience = oidc.get("audience")
     return audience if isinstance(audience, str) and audience else None
+
+
+def load_oidc_config() -> dict:
+    """
+    Return the effective OIDC client configuration from ``site.oidc`` (or
+    ``{}`` when not configured).
+
+    The ``PILOT_OIDC_CLIENT_SECRET`` environment variable, when set to a
+    non-empty value, overrides ``client_secret`` so the secret can be kept
+    out of the configuration file (same pattern as ``FLASK_SECRET_KEY``).
+    This is the server-side counterpart used by the login endpoints in
+    ``api.login`` — remote clients never see the secret.
+    """
+    oidc = load_site_config().get("oidc")
+    if not isinstance(oidc, dict):
+        return {}
+    env_secret = os.environ.get("PILOT_OIDC_CLIENT_SECRET")
+    if env_secret:
+        return {**oidc, "client_secret": env_secret}
+    return oidc
 

@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **CR1 — repository split**: the HPC Pilot monorepo was split into three
+  repositories: **pilot-api** (this repo — the REST API server),
+  **pilot-app** (the web GUI) and **pilot-deploy** (Helm charts + docker
+  recipes). `manager/` was renamed to `server/` and `documentation/` to
+  `docs/`; each repository carries its own file history (extracted with
+  `git filter-repo`).
+- `main.py` registers the API blueprints only; the GUI now lives in
+  pilot-app. `/` redirects to the Swagger UI.
+
+### Added
+
+- **Public endpoints** so remote clients (the pilot-app GUI) need no local
+  JWT handling and never see the OIDC client secret:
+  `GET /api/site` (display-safe site metadata), `POST /api/auth/verify`
+  (validate an access token → claims + namespace),
+  `POST /api/auth/oidc/exchange` (server-side OAuth code + PKCE exchange).
+- **Saved-config CRUD**: `GET/POST /api/saved`, `GET/DELETE /api/saved/{id}`
+  (complementing the existing `POST /api/saved/seed`).
+
 ## [v0.4.1] - 2026-10-13
 
 ### Added

@@ -15,7 +15,7 @@ starting a server.
 |---|---|
 | `lib.k8s_client` | Create / list / delete Kubernetes jobs (Deployments) pinned to InterLink nodes |
 | `lib.helm_client` | Install / list / get-values / uninstall Helm chart releases |
-| `lib.hpc_config` | Load per-HPC-node config files from `manager/hpc/<name>.yaml` |
+| `lib.hpc_config` | Load per-HPC-node config files from `server/hpc/<name>.yaml` |
 | `lib.hpc_client` | Deploy and manage wstunnel + supervisord + plugin on a remote HPC node via `mccli` |
 | `lib.token_auth` | Validate EGI Check-in JWT tokens; derive K8s namespaces; check group access |
 | `lib.token_checkin` | CLI helper for the EGI Check-in OAuth 2.0 Device Authorization Grant |
@@ -218,7 +218,7 @@ result = helm_uninstall(release_name="interlink-test-echo", namespace="user-abc1
 from lib.hpc_config import list_hpc_nodes, load_hpc_config
 ```
 
-Loads per-HPC-node config files from `manager/hpc/<name>.yaml`. Each file has
+Loads per-HPC-node config files from `server/hpc/<name>.yaml`. Each file has
 the structure:
 
 ```yaml
@@ -390,9 +390,9 @@ Stable, Kubernetes-safe namespace name (21 chars, RFC 1123 compliant).
 ## `lib.token_checkin` — CLI Token Helper
 
 ```bash
-python manager/lib/token_checkin.py new                  # full device flow
-python manager/lib/token_checkin.py new --audience interlink
-python manager/lib/token_checkin.py refresh --file tokens_egi.json
+python server/lib/token_checkin.py new                  # full device flow
+python server/lib/token_checkin.py new --audience interlink
+python server/lib/token_checkin.py refresh --file tokens_egi.json
 ```
 
 Implements the OAuth 2.0 Device Authorization Grant against EGI Check-in,
@@ -413,7 +413,7 @@ from lib.saved_deployments import (
 ```
 
 Persists per-user saved configurations as a JSON file per namespace under
-`manager/data/<namespace>.json`.
+`server/data/<namespace>.json`.
 
 ```python
 # Save a deployment spec (kind: "container" | "helm")

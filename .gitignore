@@ -1,9 +1,7 @@
 tmp/
-manager/data/
-charts/*values*.yaml
+server/data/
 __pycache__/
-charts/interlink/interlink-helm-chart
 .DS_Store
 .venv/
 .clinerules
-documentation/notes/
+docs/notes/

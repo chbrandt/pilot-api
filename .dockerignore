@@ -1,6 +1,5 @@
 .[a-zA-Z]*
-charts
-docker
-duckduck
+docs
+tests
 tmp
 **/__pycache__

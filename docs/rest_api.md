@@ -27,7 +27,7 @@ You can obtain one with the Device Authorization Grant helper shipped in this
 repository:
 
 ```bash
-python manager/lib/token_checkin.py new
+python server/lib/token_checkin.py new
 # Follow the printed URL, authenticate in your browser, then read the
 # access token from the printed tokens file.
 export TOKEN=$(python -c "import json;print(json.load(open('tokens_egi.json'))['access_token'])")
@@ -415,7 +415,7 @@ The manager deploys **one InterLink Helm release per (user, HPC node) pair**.
 Each release is named `interlink-<hpc_name>` and its virtual-kubelet node is
 named `vk-node-<user-hash>-<hpc_name>`, so a user may run multiple InterLink
 virtual-kubelet nodes at once — one per configured HPC target (see the
-`hpc.nodes` section of `manager/pilot_config.yaml`). Chart reference,
+`hpc.nodes` section of `server/pilot_config.yaml`). Chart reference,
 version and default values are read from the `charts` section of the same
 file (see [helm.md](helm.md)); only `nodeName` is overridden per (user, HPC
 node) pair.
@@ -544,7 +544,7 @@ curl -s -X POST \
 
 All HPC endpoints accept a JSON body identifying the target HPC node by its
 **name** — a short identifier that maps to an entry under `hpc.nodes` in
-`manager/pilot_config.yaml` containing the `hostname`, `ssh_port`, and
+`server/pilot_config.yaml` containing the `hostname`, `ssh_port`, and
 `plugin`. The raw Bearer token is forwarded to `mccli` for SSH
 authentication.
 
@@ -556,13 +556,13 @@ computed internally from the authenticated user's namespace and
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `hpc_name` | string | ✓ | HPC node name (matches `manager/hpc/<name>.yaml`) |
+| `hpc_name` | string | ✓ | HPC node name (matches `server/hpc/<name>.yaml`) |
 
 ---
 
 ### `GET /api/hpc/nodes` — List available HPC nodes
 
-Returns all HPC nodes defined by config files in `manager/hpc/*.yaml`.
+Returns all HPC nodes defined by config files in `server/hpc/*.yaml`.
 
 ```bash
 curl -s \
@@ -711,7 +711,7 @@ curl -s -X POST \
 
 ## OpenAPI / Swagger UI
 
-- The raw OpenAPI 3.1 spec is served at [`/api/openapi.yaml`](../manager/api/openapi.yaml).
+- The raw OpenAPI 3.1 spec is served at [`/api/openapi.yaml`](../server/api/openapi.yaml).
 - A browseable Swagger UI is mounted at **`/api/docs`**.
 
 ---

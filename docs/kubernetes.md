@@ -95,7 +95,7 @@ The manager's service account (in-cluster) or kubeconfig user (external) needs
 to manage namespaces, jobs, and — because the `helm` CLI runs under the same
 identity — the Helm release storage (Secrets/ConfigMaps) and supporting
 resources. The authoritative rule set is the chart's
-[`clusterrole.yaml`](../charts/manager/templates/clusterrole.yaml); in summary:
+[`clusterrole.yaml`](https://github.com/chbrandt/pilot-deploy/tree/main/charts/manager/templates/clusterrole.yaml); in summary:
 
 ```yaml
 rules:

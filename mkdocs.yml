@@ -1,7 +1,7 @@
-site_name: HPC Pilot
-site_url: https://chbrandt.github.io/hpc_pilot
-repo_url: https://github.com/chbrandt/hpc_pilot
-docs_dir: documentation
+site_name: Pilot API
+site_url: https://chbrandt.github.io/pilot-api
+repo_url: https://github.com/chbrandt/pilot-api
+docs_dir: docs
 
 theme: 
   name: material

@@ -1,7 +1,7 @@
 # pilot_config.yaml — Unified configuration for HPC Pilot Manager
 #
 # This single file replaces the previously separate site_config.yaml,
-# charts_config.yaml and manager/hpc/<name>.yaml files. It has three
+# charts_config.yaml and hpc/<name>.yaml files. It has three
 # top-level sections:
 #
 #   site:    operator-level site settings (hostname, wstunnel ports,
@@ -12,9 +12,9 @@
 #            ssh_port, plugin)
 #
 # The active config file path is resolved in this order:
-#   1. --config <path> CLI flag (see manager/main.py)
+#   1. --config <path> CLI flag (see server/main.py)
 #   2. PILOT_CONFIG_PATH environment variable
-#   3. manager/pilot_config.yaml (this file, the default)
+#   3. server/pilot_config.yaml (this file, the default)
 
 # ── site ─────────────────────────────────────────────────────────────────────
 # hostname : str

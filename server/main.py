@@ -1,11 +1,13 @@
 """
-HPC Pilot — Flask application entry point.
+Pilot API — Flask application entry point.
 
-Wires the three-layer architecture together into a single WSGI app:
+Wires the REST API layer into a single WSGI app:
 
     lib/   — pure Python business logic (importable from CLI)
     api/   — JSON REST API under /api  (cURL / HTTP clients)
-    app/   — HTML web GUI under /      (browser)
+
+The browser GUI (Pilot App) is a separate service (the ``pilot-app``
+repository); it talks to this API exclusively over HTTP (``API_BASE_URL``).
 
 Usage
 -----
@@ -14,10 +16,10 @@ Usage
     python main.py
 
     # With a custom configuration file (overrides PILOT_CONFIG_PATH and the
-    # default manager/pilot_config.yaml):
+    # default server/pilot_config.yaml):
     python main.py --config /path/to/pilot_config.yaml
 
-    # Or with Flask's CLI (from the manager/ directory):
+    # Or with Flask's CLI (from the server/ directory):
     flask --app main run
 
 Environment variables
@@ -27,7 +29,7 @@ FLASK_PORT        Port to listen on (default: 5000)
 FLASK_DEBUG       Set to "1" to enable debug mode
 FLASK_SECRET_KEY  Flask session secret (change in production!)
 PILOT_CONFIG_PATH Path to the unified pilot_config.yaml (overridden by
-                  --config; default: manager/pilot_config.yaml)
+                  --config; default: server/pilot_config.yaml)
 """
 
 import argparse
@@ -35,7 +37,7 @@ import logging
 import os
 import sys
 
-from flask import Flask, jsonify
+from flask import Flask, jsonify, redirect, url_for
 
 # ── Logging ───────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -72,44 +74,30 @@ def create_app() -> Flask:
     """
     Application factory.
 
-    Creates and configures the Flask application, registers all blueprints,
-    and sets up the template context processor.
+    Creates and configures the Flask application and registers the REST API
+    blueprints, the Swagger UI, and the public health endpoint.
     """
-    # Templates and static files live in app/templates and app/static
-    app = Flask(
-        __name__,
-        template_folder=os.path.join(os.path.dirname(__file__), "app", "templates"),
-        static_folder=os.path.join(os.path.dirname(__file__), "app", "static"),
-    )
+    app = Flask(__name__)
     app.secret_key = os.environ.get(
         "FLASK_SECRET_KEY", "dev-secret-change-in-production"
     )
 
-    # ── Layer 3: Web GUI blueprints ───────────────────────────────────
-    from app.auth import auth_bp
-    from app.k8s import k8s_bp
-    from app.helm import helm_bp
-    from app.hpc import hpc_bp as app_hpc_bp
-    from app.saved import saved_bp
-
-    app.register_blueprint(auth_bp)
-    app.register_blueprint(k8s_bp)
-    app.register_blueprint(helm_bp)
-    app.register_blueprint(app_hpc_bp)
-    app.register_blueprint(saved_bp)
-
-    # ── Layer 2: REST API blueprints ──────────────────────────────────
+    # ── REST API blueprints ────────────────────────────────────────────
     from api.k8s import k8s_bp as api_k8s_bp
     from api.helm import helm_bp as api_helm_bp
     from api.hpc import hpc_bp as api_hpc_bp
     from api.saved import saved_bp as api_saved_bp
     from api.docs import docs_bp
+    from api.site import site_bp
+    from api.login import login_bp
 
     app.register_blueprint(api_k8s_bp)
     app.register_blueprint(api_helm_bp)
     app.register_blueprint(api_hpc_bp)
     app.register_blueprint(api_saved_bp)
     app.register_blueprint(docs_bp)
+    app.register_blueprint(site_bp)
+    app.register_blueprint(login_bp)
 
     # ── Swagger UI ────────────────────────────────────────────────────
     from flask_swagger_ui import get_swaggerui_blueprint
@@ -117,26 +105,26 @@ def create_app() -> Flask:
     swaggerui_bp = get_swaggerui_blueprint(
         "/api/docs",          # Swagger UI will be served at this URL
         "/api/openapi.yaml",  # URL of the OpenAPI spec (served by docs_bp)
-        config={"app_name": "HPC Pilot API"},
+        config={"app_name": "Pilot API"},
     )
     app.register_blueprint(swaggerui_bp, url_prefix="/api/docs")
 
-    # ── Public health endpoint (liveness probe, no auth) ──────
+    # ── Public health endpoint (liveness probe, no auth) ───────────────
     @app.route("/health", methods=["GET"])
     def health():
         """Liveness probe -- public, returns a simple JSON status."""
         return jsonify({"status": "Service alive"})
 
-    # ── Context processor — injects current_user into every template ──
-    @app.context_processor
-    def inject_user():
-        from app.auth import get_session_user
-        return {"current_user": get_session_user()}
+    # ── Root: redirect browsers to the Swagger UI ──────────────────────
+    @app.route("/", methods=["GET"])
+    def root():
+        """Redirect the bare URL to the API documentation (Swagger UI)."""
+        return redirect(url_for("swagger_ui.show"))
 
     return app
 
 
-# ── Entry point ───────────────────────────────────────────────────────
+# ── Entry point ────────────────────────────────────────────────────────
 
 app = create_app()
 

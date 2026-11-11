@@ -1,7 +1,7 @@
 openapi: 3.1.0
 
 info:
-  title: HPC Pilot API
+  title: Pilot API
   description: |
     REST API layer for HPC Pilot.
 
@@ -21,7 +21,7 @@ info:
     is derived automatically from the `sub` claim.
   version: 1.0.0
   contact:
-    url: https://github.com/chbrandt/hpc_pilot
+    url: https://github.com/chbrandt/pilot-api
 
 servers:
   # Relative URL: Swagger UI ("Try it out") resolves it against the origin
@@ -43,6 +43,12 @@ tags:
     description: interLink deployments
   - name: Jobs
     description: Job operations
+  - name: Saved
+    description: Saved deployment configurations
+  - name: Site
+    description: Public site metadata
+  - name: Auth
+    description: Public login / token verification
   - name: Namespaces
     description: Manage user space 
 
@@ -1159,3 +1165,310 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "500":
           $ref: "#/components/responses/InternalError"
+
+  # ── Public: site metadata (used by the Pilot App GUI) ────────────────────
+
+  /api/site:
+    get:
+      tags: [Site]
+      summary: Public site metadata
+      description: |
+        Display-safe site configuration for remote clients (the Pilot App
+        GUI): shared hostname, wstunnel ports, default container image and
+        the OIDC client_id/issuer used by the login button.
+
+        No secrets are exposed. No authentication required.
+      operationId: getSiteMeta
+      security: []
+      responses:
+        "200":
+          description: Site metadata
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hostname:
+                    type: string
+                    example: manager.example.org
+                  default_image:
+                    type: string
+                    example: ubuntu:22.04
+                  wstunnel:
+                    type: object
+                    properties:
+                      port:
+                        type: integer
+                        example: 443
+                      local_port:
+                        type: integer
+                        example: 4000
+                  oidc:
+                    type: object
+                    properties:
+                      enabled:
+                        type: boolean
+                        example: true
+                      client_id:
+                        type: string
+                        example: pilot
+                      issuer:
+                        type: string
+                        example: https://aai.egi.eu/auth/realms/egi
+
+  # ── Public: login / token verification (Pilot App GUI) ──────────────────
+
+  /api/auth/verify:
+    post:
+      tags: [Auth]
+      summary: Verify an access token (token-paste login)
+      description: |
+        Validate an EGI Check-in access token (signature, expiry, issuer,
+        optional audience, group access) and return the verified claims plus
+        the derived user namespace, so remote GUI clients can establish
+        their session without validating JWTs locally.
+      operationId: verifyToken
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [access_token]
+              properties:
+                access_token:
+                  type: string
+      responses:
+        "200":
+          description: Token is valid — claims + namespace returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                  namespace:
+                    type: string
+                    example: user-a3f1b2c4d5e6f7a8
+                  claims:
+                    type: object
+                    description: >
+                      Verified JWT claims (merged with UserInfo when group
+                      checks are enabled).
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Group access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: UserInfo endpoint unavailable (could not verify group membership)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/auth/oidc/exchange:
+    post:
+      tags: [Auth]
+      summary: OAuth authorization-code exchange (EGI Check-in button login)
+      description: |
+        Complete the OAuth 2.0 authorization-code + PKCE exchange server-side
+        (the OIDC client secret never leaves the API) and return the same
+        payload as POST /api/auth/verify. The GUI sends the code, the PKCE
+        verifier and the redirect_uri it used when starting the flow.
+      operationId: oidcExchange
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code, code_verifier, redirect_uri]
+              properties:
+                code:
+                  type: string
+                code_verifier:
+                  type: string
+                redirect_uri:
+                  type: string
+                  example: http://localhost:5000/oauth/callback
+      responses:
+        "200":
+          description: Exchange succeeded — claims + namespace returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                  namespace:
+                    type: string
+                    example: user-a3f1b2c4d5e6f7a8
+                  claims:
+                    type: object
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Group access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "502":
+          description: Identity provider unreachable / malformed response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: OIDC login is not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ── Saved configurations ────────────────────────────────────────────────
+
+  /api/saved:
+    get:
+      tags: [Saved]
+      summary: List saved configurations
+      description: |
+        List the authenticated user's saved deployment configurations,
+        optionally filtered by `kind` (e.g. `container`, `helm`).
+      operationId: listSavedConfigs
+      parameters:
+        - name: kind
+          in: query
+          required: false
+          schema:
+            type: string
+          example: container
+      responses:
+        "200":
+          description: Array of saved configuration entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Saved]
+      summary: Save a configuration
+      description: |
+        Persist a new saved deployment configuration for the authenticated
+        user. Body: {"kind": "container"|"helm", "config": {...}}.
+      operationId: createSavedConfig
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind, config]
+              properties:
+                kind:
+                  type: string
+                  example: container
+                config:
+                  type: object
+      responses:
+        "201":
+          description: Saved entry (with generated id and saved_at)
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/saved/seed:
+    post:
+      tags: [Saved]
+      summary: Seed default chart configurations
+      description: |
+        Idempotently seed the default Helm chart configurations (from the
+        unified configuration file) into the authenticated user's
+        saved-config store.  Safe to call on every login.
+      operationId: seedSavedDefaults
+      responses:
+        "200":
+          description: Seeding completed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  seeded:
+                    type: boolean
+                    example: true
+                  namespace:
+                    type: string
+                    example: user-a3f1b2c4d5e6f7a8
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/saved/{config_id}:
+    get:
+      tags: [Saved]
+      summary: Get one saved configuration
+      operationId: getSavedConfig
+      parameters:
+        - name: config_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Saved configuration entry
+          content:
+            application/json:
+              schema:
+                type: object
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Saved]
+      summary: Delete one saved configuration
+      operationId: deleteSavedConfig
+      parameters:
+        - name: config_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted:
+                    type: string
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"

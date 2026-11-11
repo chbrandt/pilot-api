@@ -10,7 +10,7 @@ release is named `interlink-<hpc_name>` and its virtual-kubelet node
 `vk-node-<user-hash>-<hpc_name>`, so a user may have several InterLink
 instances at once, one per configured HPC target. Chart reference, version
 and default values are defined once in
-[`charts_config.yaml`](../manager/charts_config.yaml) and installed via the
+[`charts_config.yaml`](../server/charts_config.yaml) and installed via the
 [`/api/interlink`](rest_api.md#interlink-chart-apiinterlink) endpoint, which additionally
 requires an `hpc_name` and overrides `nodeName` accordingly (no arbitrary
 chart is accepted at runtime). See [configuration.md](configuration.md#charts-section).
@@ -128,7 +128,7 @@ wstunnel:
 ```
 
 Operators can override any of these keys via the `chartsConfig` block of the
-manager Helm chart (see [`charts/manager/README.md`](../charts/manager/README.md)).
+manager Helm chart (see [`charts/manager/README.md`](https://github.com/chbrandt/pilot-deploy/tree/main/charts/manager/README.md)).
 
 
 ---

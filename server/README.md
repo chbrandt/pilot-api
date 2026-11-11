@@ -1,35 +1,38 @@
-# HPC Pilot — Manager App
+# Pilot API — Server
 
-The Flask application that powers HPC Pilot: it submits HPC jobs (container
-workloads forwarded to HPC batch systems via [interLink](https://interlink-project.dev)),
-deploys per-user InterLink pods, manages the HPC edge-node wstunnel client,
-and authenticates via [EGI Check-in](https://www.egi.eu/service/check-in/).
+The REST API service that powers HPC Pilot: it submits HPC jobs (container
+workloads forwarded to HPC batch systems via
+[interLink](https://interlink-project.dev)), deploys per-user InterLink pods,
+manages the HPC edge-node wstunnel client, and authenticates via
+[EGI Check-in](https://www.egi.eu/service/check-in/).
 
 It can run **outside** the cluster (local dev / VM, external kubeconfig) or
 **inside** the cluster as a Deployment managed by the
-[`charts/manager/`](../charts/manager/) Helm chart.
+[pilot-deploy Helm chart](https://github.com/chbrandt/pilot-deploy/tree/main/charts/manager).
 
-> For the full documentation see [`../documentation/README.md`](../documentation/README.md).
+> For the full documentation see [`../docs/README.md`](../docs/README.md).
 
 ---
 
-## Three-layer architecture
+## Two-layer architecture
 
 ```
-manager/
+server/
 ├── lib/       # Pure Python business logic (importable from CLI)
 ├── api/       # JSON REST API under /api   (cURL / HTTP clients)
-├── app/       # HTML web GUI under /       (browser)
-├── main.py    # Flask application entry point (wires lib+api+app)
+├── hpc/       # Runtime templates shipped to the HPC edge-node
+├── k8s/       # In-cluster fixtures
+├── main.py    # Flask application entry point (wires lib+api)
 └── pilot_config.yaml # Unified config: site, default charts, HPC nodes
 ```
 
 - `lib/` — Kubernetes SDK, `helm` CLI, `mccli`/SSH, JWT validation. No Flask.
-- `api/` — thin JSON wrappers over `lib/`, protected by Bearer-token auth.
-- `app/` — HTML routes; a thin client that calls the `api/` layer over HTTP
-  via `app/api_client.py` (loopback by default; split with `API_BASE_URL`).
+- `api/` — thin JSON wrappers over `lib/`, protected by Bearer-token auth,
+  plus public endpoints (`GET /api/site`, `POST /api/auth/*`) so the
+  [Pilot App](https://github.com/chbrandt/pilot-app) GUI never validates
+  JWTs locally and never sees the OIDC client secret.
 
-See [`../documentation/architecture.md`](../documentation/architecture.md).
+See [`../docs/architecture.md`](../docs/architecture.md).
 
 ---
 
@@ -45,15 +48,15 @@ pip install -r requirements.txt
 # 3. Set kubeconfig (optional — defaults to ~/.kube/config)
 export KUBECONFIG=/path/to/your/kubeconfig
 
-# 4. Set a secret key
-export FLASK_SECRET_KEY="$(python -c 'import secrets; print(secrets.token_hex(32))')"
-
-# 5. Run
+# 4. Run
 python main.py
 # → http://localhost:5000  (Swagger UI at /api/docs)
 
 # Or with a custom configuration file:
 python main.py --config /path/to/pilot_config.yaml
+
+# Then run the GUI (pilot-app repository) against this API:
+#   API_BASE_URL=http://localhost:5000 python main.py
 ```
 
 ---
@@ -72,17 +75,18 @@ python main.py --config /path/to/pilot_config.yaml
 | `FLASK_SECRET_KEY` | `dev-secret-change-in-production` | Session cookie key — **change in production** |
 | `FLASK_PORT` | `5000` | TCP port |
 | `FLASK_DEBUG` | `0` | `1` for debug mode |
-| `API_BASE_URL` | `http://localhost:5000` | REST API base URL as seen from the GUI layer |
-| `PILOT_CONFIG_PATH` | `manager/pilot_config.yaml` | Path to the unified config file (overridden by `--config`) |
+| `PILOT_CONFIG_PATH` | `server/pilot_config.yaml` | Path to the unified config file (overridden by `--config`) |
+| `PILOT_OIDC_CLIENT_SECRET` | — | Overrides `site.oidc.client_secret` for confidential OIDC clients |
 
-See [`../documentation/configuration.md`](../documentation/configuration.md).
+See [`../docs/configuration.md`](../docs/configuration.md).
 
 ---
 
 ## Further reading
 
-- [Deployment Guide](../documentation/deployment.md)
-- [REST API Reference](../documentation/rest_api.md) (also at `/api/docs`)
-- [Web UI Routes](../documentation/api.md)
-- [Python Library](../documentation/lib.md)
-- [Authentication](../documentation/authentication.md)
+- [Deployment Guide](../docs/deployment.md)
+- [REST API Reference](../docs/rest_api.md) (also at `/api/docs`)
+- [Python Library](../docs/lib.md)
+- [Authentication](../docs/authentication.md)
+- [pilot-app](https://github.com/chbrandt/pilot-app) — the web GUI
+- [pilot-deploy](https://github.com/chbrandt/pilot-deploy) — Helm charts and deployment recipes

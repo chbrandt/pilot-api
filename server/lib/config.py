@@ -6,7 +6,7 @@ YAML document with three top-level sections:
 
     site:    operator-level site settings (was site_config.yaml)
     charts:  default Helm chart catalogue (was charts_config.yaml)
-    hpc:     per-HPC-node connection details (was manager/hpc/<name>.yaml)
+    hpc:     per-HPC-node connection details (was hpc/<name>)
         nodes:
           <name>:
             hostname: ...
@@ -18,7 +18,7 @@ The config file path is resolved in this order:
     1. :func:`set_config_path` — set explicitly (used by the manager's
        ``--config`` CLI flag, see ``main.py``).
     2. ``PILOT_CONFIG_PATH`` environment variable.
-    3. ``<manager_root>/pilot_config.yaml`` (default).
+    3. ``<server_root>/pilot_config.yaml`` (default).
 
 This module is the single source of truth for configuration; the thin
 ``api.site_config.load_site_config`` and ``lib.hpc_config``/
@@ -35,7 +35,7 @@ import yaml
 
 logger = logging.getLogger(__name__)
 
-# manager/ root — one level above this lib/ directory
+# server/ root — one level above this lib/ directory
 _MANAGER_DIR = os.path.dirname(os.path.dirname(__file__))
 _DEFAULT_CONFIG_PATH = os.path.join(_MANAGER_DIR, "pilot_config.yaml")
 

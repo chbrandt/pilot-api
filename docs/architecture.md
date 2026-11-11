@@ -2,38 +2,43 @@
 
 ## Overview
 
-HPC Pilot is a three-layer web application. A single Flask process (the
-**manager**) runs the whole stack; the layers communicate as follows:
+HPC Pilot runs as **two cooperating services** (split out of the original
+single-process "manager" in the `pilot-*` repository split):
 
-- `lib/` — pure-Python business logic (Kubernetes SDK, `helm` CLI subprocess,
-  `mccli`/SSH). No Flask dependency.
-- `api/` — JSON REST API under `/api`, protected by Bearer-token auth. Calls
-  `lib/` directly.
-- `app/` — HTML web GUI under `/`. A thin client that talks to the `api/`
-  layer over HTTP via `app/api_client.py` (loopback by default; split
-  deployment via `API_BASE_URL`).
+- **pilot-api** (this repository) — the REST API service under `/api`,
+  protected by Bearer-token auth. Hosts all business logic:
 
-The manager can run **outside** the cluster (local dev / VM, external
+  - `lib/` — pure-Python business logic (Kubernetes SDK, `helm` CLI
+    subprocess, `mccli`/SSH). No Flask dependency.
+  - `api/` — thin JSON wrappers over `lib/`, plus public endpoints
+    (`GET /api/site`, `POST /api/auth/*`) used by the GUI.
+
+- **pilot-app** ([separate repository](https://github.com/chbrandt/pilot-app))
+  — the HTML web GUI under `/`. A pure HTTP client: it never validates
+  JWTs locally and never sees the OIDC client secret. All backend calls go
+  through `API_BASE_URL` (in-cluster by default).
+
+The API can run **outside** the cluster (local dev / VM, external
 kubeconfig) or **inside** the cluster as a Deployment managed by the
-[`charts/manager/`](../charts/manager/) Helm chart (in-cluster ServiceAccount
-token). In both cases it speaks to the Kubernetes API and the `helm` CLI.
+[`charts/manager/`](https://github.com/chbrandt/pilot-deploy/tree/main/charts/manager/) Helm chart (in-cluster ServiceAccount
+token). In both cases it speaks to the Kubernetes API and the `helm` CLI; the
+[pilot-deploy](https://github.com/chbrandt/pilot-deploy) chart runs both services and wires `API_BASE_URL`.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                        User's Browser                           │
 └────────────────────────────┬────────────────────────────────────┘
-                             │  HTTP (port 5000)
+                             │  HTTPS /
 ┌────────────────────────────▼────────────────────────────────────┐
-│              Flask Application (manager/main.py)                │
+│              Pilot App — pilot-app (GUI service)                 │
+│  Jinja templates + session; zero JWT / K8s logic                │
+└────────────────────────────┬────────────────────────────────────┘
+                             │  HTTP (API_BASE_URL), Bearer token
+┌────────────────────────────▼────────────────────────────────────┐
+│              Pilot API — server/main.py (this repo)             │
+│  /api/* JSON  ·  /api/docs (Swagger)  ·  public /api/site,       │
+│  /api/auth/verify, /api/auth/oidc/exchange                      │
 │                                                                 │
-│  ┌─────────────────┐   HTTP    ┌──────────────────┐             │
-│  │   app/ (GUI)    │──────────►│   api/ (REST)    │             │
-│  │  HTML + templates│  loopback│  /api/* JSON     │             │
-│  │  via api_client │           │                  │             │
-│  └─────────────────┘           └────────┬─────────┘             │
-│                                         │                       │
-│                                         │ calls                 │
-│                                         ▼                       │
 │  ┌──────────────────────────────────────────────────────────┐   │
 │  │                        lib/                               │   │
 │  │  ┌────────────┐  ┌─────────────┐  ┌──────────────────┐   │   │
@@ -59,9 +64,9 @@ token). In both cases it speaks to the Kubernetes API and the `helm` CLI.
 ## Module Responsibilities
 
 ### `main.py`
-Flask application factory (`create_app`). Registers all blueprints (from
-`app/` and `api/`), mounts the Swagger UI at `/api/docs`, and injects
-`current_user` into every template via a context processor.
+Flask application factory (`create_app`). Registers the API blueprints,
+mounts the Swagger UI at `/api/docs`, serves `/health`, and redirects `/`
+to the docs.
 
 ### `lib/k8s_client.py`
 Wraps the official `kubernetes` Python SDK. Manages namespaces and job
@@ -77,7 +82,7 @@ Wraps `mccli` (motley-cue SSH client) to install and manage the wstunnel client
 + supervisord + InterLink plugin on a remote HPC node. See [lib.md](lib.md).
 
 ### `lib/config.py`
-Unified configuration loader: parses `manager/pilot_config.yaml` (or a
+Unified configuration loader: parses `server/pilot_config.yaml` (or a
 `--config`/`PILOT_CONFIG_PATH` override) and exposes its `site`, `charts`
 and `hpc.nodes` sections.
 
@@ -89,7 +94,7 @@ EGI Check-in JWT/JWKS validation, namespace derivation, UserInfo-based group
 access checks. See [authentication.md](authentication.md).
 
 ### `lib/saved_deployments.py`
-Per-user saved-configuration store (JSON files under `manager/data/`), plus
+Per-user saved-configuration store (JSON files under `server/data/`), plus
 the default-chart seeding logic driven by the `charts` section of
 `pilot_config.yaml`.
 
@@ -97,10 +102,13 @@ the default-chart seeding logic driven by the `charts` section of
 Thin JSON wrappers over `lib/`. Each module is a Flask blueprint with the
 `/api` prefix. Auth is enforced by `require_token` (`api/auth.py`).
 
-### `app/` layer
-HTML routes. Each module is a Flask blueprint. Backend calls go through
-`app/api_client.py` (`api_get`/`api_post`/`api_delete`) so the GUI has no
-direct `lib/` dependency and could run as a separate process.
+### `app/` layer (now pilot-app)
+The HTML GUI has moved to the
+[pilot-app repository](https://github.com/chbrandt/pilot-app) as a separate
+service. Its backend calls go through `app/api_client.py`
+(`api_get`/`api_post`/`api_delete`) pointing at `API_BASE_URL`; login uses the
+public `POST /api/auth/verify` and `POST /api/auth/oidc/exchange` endpoints,
+so it has no JWT logic and no OIDC secret.
 
 ---
 

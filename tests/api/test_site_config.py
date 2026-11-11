@@ -85,3 +85,51 @@ class TestLoadSiteConfig:
         assert result["hostname"] == "dev.local"
         assert result["some_future_key"] == "value"
 
+
+# ---------------------------------------------------------------------------
+# load_oidc_config (env secret override)
+# ---------------------------------------------------------------------------
+
+
+class TestLoadOidcConfig:
+    _YAML_OIDC = {
+        "client_id": "pilot",
+        "client_secret": "yaml-secret",
+        "issuer": "https://aai.egi.eu/auth/realms/egi",
+    }
+
+    def _config_file(self, tmp_path, oidc):
+        cfg_file = tmp_path / "pilot_config.yaml"
+        cfg_file.write_text(
+            yaml.dump({"site": {"oidc": oidc}}), encoding="utf-8"
+        )
+        return str(cfg_file)
+
+    def test_returns_oidc_section(self, tmp_path):
+        path = self._config_file(tmp_path, self._YAML_OIDC)
+        with patch.object(cfg, "_config_path_override", path):
+            result = sc.load_oidc_config()
+        assert result["client_id"] == "pilot"
+        assert result["client_secret"] == "yaml-secret"
+
+    def test_env_secret_overrides_yaml_secret(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("PILOT_OIDC_CLIENT_SECRET", "env-secret")
+        path = self._config_file(tmp_path, self._YAML_OIDC)
+        with patch.object(cfg, "_config_path_override", path):
+            result = sc.load_oidc_config()
+        assert result["client_secret"] == "env-secret"
+
+    def test_empty_env_secret_keeps_yaml_secret(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("PILOT_OIDC_CLIENT_SECRET", "")
+        path = self._config_file(tmp_path, self._YAML_OIDC)
+        with patch.object(cfg, "_config_path_override", path):
+            result = sc.load_oidc_config()
+        assert result["client_secret"] == "yaml-secret"
+
+    def test_returns_empty_dict_when_oidc_missing(self, tmp_path):
+        cfg_file = tmp_path / "pilot_config.yaml"
+        cfg_file.write_text("site:\n  hostname: dev.local\n", encoding="utf-8")
+        with patch.object(cfg, "_config_path_override", str(cfg_file)):
+            assert sc.load_oidc_config() == {}
+
+
