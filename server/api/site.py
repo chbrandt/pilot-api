@@ -6,7 +6,9 @@ Returns a *display-safe* subset of the site configuration so remote clients
 
 * the shared site hostname and wstunnel ports,
 * the default container image proposed in the Submit Job form, and
-* the OIDC client_id / issuer behind the "Log in with EGI Check-in" button.
+* the OIDC client_id / issuer / expected audience behind the
+  "Log in with EGI Check-in" button — the audience lets standalone clients
+  (a Python SDK, the CLI) mint tokens the API's validation accepts.
 
 No secrets (client_secret, session keys, …) are ever exposed here.
 """
@@ -31,7 +33,7 @@ def _ok(data, code: int = 200) -> tuple[str, int, dict]:
 
 @site_bp.route("/site", methods=["GET"])
 def site_meta() -> tuple[str, int, dict]:
-    """Public, unauthenticated site metadata for remote GUI clients."""
+    """Public, unauthenticated site metadata for remote clients (GUI/SDK)."""
     cfg = load_site_config()
     oidc = load_oidc_config()
 
@@ -51,6 +53,7 @@ def site_meta() -> tuple[str, int, dict]:
             "enabled": bool(client_id),
             "client_id": client_id,
             "issuer": oidc.get("issuer") or _DEFAULT_ISSUER,
+            "audience": oidc.get("audience", "") or "",
         },
     }
     return _ok(data)

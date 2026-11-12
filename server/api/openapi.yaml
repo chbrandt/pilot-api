@@ -1174,8 +1174,13 @@ paths:
       summary: Public site metadata
       description: |
         Display-safe site configuration for remote clients (the Pilot App
-        GUI): shared hostname, wstunnel ports, default container image and
-        the OIDC client_id/issuer used by the login button.
+        GUI, standalone SDK/CLI clients): shared hostname, wstunnel ports,
+        default container image and the OIDC client_id/issuer/audience used
+        by the login button.
+
+        The audience mirrors `site.oidc.audience` — the expected JWT `aud`
+        claim enforced on every login — so clients minting their own tokens
+        can request one the API accepts.
 
         No secrets are exposed. No authentication required.
       operationId: getSiteMeta
@@ -1215,6 +1220,12 @@ paths:
                       issuer:
                         type: string
                         example: https://aai.egi.eu/auth/realms/egi
+                      audience:
+                        type: string
+                        description: |
+                          Expected JWT 'aud' claim (site.oidc.audience);
+                          empty string when audience checks are disabled.
+                        example: hpc-pilot
 
   # ── Public: login / token verification (Pilot App GUI) ──────────────────
 

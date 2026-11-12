@@ -44,17 +44,23 @@ class TestSiteMeta:
 
         assert data["oidc"]["enabled"] is False
         assert data["oidc"]["client_id"] == ""
+        assert data["oidc"]["audience"] == ""
 
     def test_oidc_configured(self, client):
         with patch(
             OIDC_PATCH,
-            return_value={"client_id": "pilot", "issuer": "https://idp.example.org"},
+            return_value={
+                "client_id": "pilot",
+                "issuer": "https://idp.example.org",
+                "audience": "hpc-pilot-aud",
+            },
         ):
             data = client.get(self.URL).get_json(force=True)
 
         assert data["oidc"]["enabled"] is True
         assert data["oidc"]["client_id"] == "pilot"
         assert data["oidc"]["issuer"] == "https://idp.example.org"
+        assert data["oidc"]["audience"] == "hpc-pilot-aud"
 
     def test_never_exposes_client_secret(self, client):
         """The OIDC client_secret must never appear in the public payload."""

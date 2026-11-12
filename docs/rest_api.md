@@ -101,7 +101,10 @@ this API.
 
 Returns a display-safe subset of the site configuration: the shared
 `hostname`, the wstunnel ports, the default container image and the OIDC
-`client_id`/`issuer` used by the GUI's login button. **No secrets are
+`client_id`/`issuer`/`audience` used by the GUI's login button. `audience`
+mirrors `site.oidc.audience` — the expected JWT `aud` claim the API
+enforces on every login — so standalone clients minting their own tokens
+(a Python SDK, the CLI) can request one the API accepts. **No secrets are
 exposed.**
 
 ``` bash
@@ -115,7 +118,12 @@ curl -s https://pilot.example.org/api/site
   "hostname": "pilot.example.org",
   "default_image": "ubuntu:22.04",
   "wstunnel": {"port": 443, "local_port": 4000},
-  "oidc": {"enabled": true, "client_id": "pilot", "issuer": "https://aai.egi.eu/auth/realms/egi"}
+  "oidc": {
+    "enabled": true,
+    "client_id": "pilot",
+    "issuer": "https://aai.egi.eu/auth/realms/egi",
+    "audience": "hpc-pilot"
+  }
 }
 ```
 

@@ -5,6 +5,17 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`GET /api/site` exposes the OIDC audience**: the public payload's
+  `oidc` object now includes the expected JWT `aud` claim
+  (`site.oidc.audience`) alongside `client_id`/`issuer` — so standalone
+  clients (a Python SDK, the CLI) minting their own tokens can request an
+  audience the API's validation accepts. Still display-safe: the
+  `client_secret` is never exposed.
+
 ## [v0.5] - 2026-12-11
 
 ### Changed
