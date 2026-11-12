@@ -25,12 +25,12 @@ site_bp = Blueprint("api_site", __name__, url_prefix="/api")
 _DEFAULT_ISSUER = "https://aai.egi.eu/auth/realms/egi"
 
 
-def _ok(data, code: int = 200):
+def _ok(data, code: int = 200) -> tuple[str, int, dict]:
     return json.dumps(data), code, {"Content-Type": "application/json"}
 
 
 @site_bp.route("/site", methods=["GET"])
-def site_meta():
+def site_meta() -> tuple[str, int, dict]:
     """Public, unauthenticated site metadata for remote GUI clients."""
     cfg = load_site_config()
     oidc = load_oidc_config()

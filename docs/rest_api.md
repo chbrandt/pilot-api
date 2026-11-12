@@ -13,12 +13,17 @@ All endpoints are mounted under the `/api` path prefix.
 
 ## Authentication
 
-Every endpoint is protected. Attach a valid EGI Check-in access token as a
-[Bearer token](https://datatracker.ietf.org/doc/html/rfc6750):
+Protected endpoints require a valid EGI Check-in access token, attached as
+a [Bearer token](https://datatracker.ietf.org/doc/html/rfc6750):
 
 ```bash
 curl -H "Authorization: Bearer $TOKEN" https://manager.example.org/api/jobs
 ```
+
+(The public exceptions — `/health`, `/api/site` and the two `/api/auth`
+login endpoints — are documented in the **Site & Login (public)** section
+below; they exist so the Pilot App GUI can bootstrap and log users in
+without handling JWTs itself.)
 
 **Token acquisition**
 
@@ -79,6 +84,81 @@ curl https://manager.example.org/health
 ``` json
 {"status": "Service alive"}
 ```
+
+---
+
+(api-site)=
+
+## Site & Login (public) — `/api/site`, `/api/auth`
+
+These endpoints are **public** — no Bearer token required. They exist so
+that the Pilot App (the web GUI, `pilot-app` repository) can bootstrap
+itself and log users in without ever handling JWTs or the OIDC client
+secret: token validation and the OAuth code→token exchange happen inside
+this API.
+
+### `GET /api/site` — Public site metadata
+
+Returns a display-safe subset of the site configuration: the shared
+`hostname`, the wstunnel ports, the default container image and the OIDC
+`client_id`/`issuer` used by the GUI's login button. **No secrets are
+exposed.**
+
+``` bash
+curl -s https://pilot.example.org/api/site
+```
+
+**Response:**
+
+``` json
+{
+  "hostname": "pilot.example.org",
+  "default_image": "ubuntu:22.04",
+  "wstunnel": {"port": 443, "local_port": 4000},
+  "oidc": {"enabled": true, "client_id": "pilot", "issuer": "https://aai.egi.eu/auth/realms/egi"}
+}
+```
+
+### `POST /api/auth/verify` — Verify an access token
+
+Body: `{"access_token": "<EGI Check-in JWT>"}`. Runs the exact validation
+applied by `require_token` on protected routes — JWKS signature, expiry,
+trusted issuer, optional `aud` and (when `site.allowed_groups` is set)
+group membership via the EGI UserInfo endpoint — and returns the verified
+claims plus the derived namespace, so the caller can establish its
+session.
+
+``` bash
+curl -s -X POST https://pilot.example.org/api/auth/verify \
+  -H 'Content-Type: application/json' \
+  -d "{\"access_token\": \"$TOKEN\"}"
+```
+
+**Response `200`:**
+
+``` json
+{
+  "token": "<the access token>",
+  "namespace": "user-a3f1b2c4d5e6f7a8",
+  "claims": {"sub": "…@egi.eu", "iss": "https://aai.egi.eu/auth/realms/egi", "exp": 1234567890}
+}
+```
+
+Errors: `401` (token validation failed), `403` (group access denied),
+`503` (UserInfo endpoint unreachable).
+
+### `POST /api/auth/oidc/exchange` — OAuth code exchange (PKCE, server-side)
+
+Body: `{"code", "code_verifier", "redirect_uri"}` — the pieces the GUI
+collected while starting the authorization-code flow. The API performs
+the token exchange with the IdP — the OIDC client secret
+(`site.oidc.client_secret`, overridable via `PILOT_OIDC_CLIENT_SECRET`)
+**never leaves the service** — validates the resulting access token
+exactly like `/api/auth/verify`, and returns the same payload.
+
+Errors: `400` (missing fields), `401` (exchange or token validation
+failed), `403` (group access denied), `502` (IdP unreachable), `503`
+(OIDC login not configured).
 
 ---
 
@@ -513,6 +593,41 @@ curl -s -X DELETE \
 
 ## Saved Configurations — `/api/saved`
 
+Saved configurations are reusable job / chart templates stored per user
+(JSON store on the API pod; enable `api.persistence` in the pilot-deploy
+chart to make them durable). The GUI lists, saves and removes entries
+through these endpoints — it holds no store of its own.
+
+### `GET /api/saved` — List saved configs
+
+List the caller's saved configurations, optionally filtered with
+`?kind=container|helm` (the GUI uses `?kind=container` to populate the
+"choose a saved config" dropdown on the Submit Job page). Entries are
+returned newest-first, each with its `id`, `kind`, `saved_at` and payload
+fields.
+
+``` bash
+curl -s -H "Authorization: Bearer $TOKEN" \
+  "https://manager.example.org/api/saved?kind=container"
+```
+
+### `POST /api/saved` — Save a config
+
+Persist a new saved configuration for the caller. Body:
+`{"kind": "container"|"helm", "config": {...}}` (the JWT-validated
+namespace scopes the store — never sent in the body). Returns the stored
+entry with the generated `id` and `saved_at`. **Response `201`.**
+
+### `GET /api/saved/<config_id>` — Get one saved config
+
+Return one saved configuration. `404` when the entry does not exist or
+belongs to another user.
+
+### `DELETE /api/saved/<config_id>` — Delete one saved config
+
+Remove one saved configuration. Returns `{"deleted": "<config_id>"}`, or
+`404` when the entry is not found.
+
 ### `POST /api/saved/seed` — Seed default configs
 
 Idempotently seed the default Helm chart configs (from the `charts` section
@@ -760,6 +875,10 @@ print(resp.json())
 
 | Method | Path | Description |
 |---|---|---|
+| `GET` | `/health` | Public liveness probe (no auth) |
+| `GET` | `/api/site` | Public site metadata for remote GUI clients (no auth) |
+| `POST` | `/api/auth/verify` | Validate an access token → claims + namespace (public) |
+| `POST` | `/api/auth/oidc/exchange` | OAuth code + PKCE exchange (public; secret stays server-side) |
 | `POST` | `/api/userspace/` | Idempotently create the user's personal namespace |
 | `DELETE` | `/api/userspace/` | Delete the user's namespace and all its resources |
 | `POST` | `/api/userspace/prune` | Prune everything: InterLink releases, HPC edge stacks, namespace |
@@ -775,6 +894,10 @@ print(resp.json())
 | `GET` | `/api/interlink` | Get InterLink release values for a given `hpc_name` |
 | `DELETE` | `/api/interlink` | Uninstall the InterLink release for a given `hpc_name` |
 | `POST` | `/api/saved/seed` | Seed default chart configs for the user |
+| `GET` | `/api/saved` | List the caller's saved configurations (`?kind=` filter) |
+| `POST` | `/api/saved` | Save a new configuration (`{"kind", "config"}`) |
+| `GET` | `/api/saved/<id>` | Return one saved configuration |
+| `DELETE` | `/api/saved/<id>` | Delete one saved configuration |
 | `GET` | `/api/hpc/nodes` | List available HPC nodes |
 | `POST` | `/api/hpc/deploy` | Deploy wstunnel on an HPC node |
 | `DELETE` | `/api/hpc/deploy` | Stop & uninstall the HPC deployment |

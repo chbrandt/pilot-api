@@ -150,7 +150,7 @@ site:
 | `redirect_uri` | no (derived as `<site.hostname>/oauth/callback`) | Explicit override; must match a redirect URI allowed for the client. |
 | `audience` | no | Optional expected JWT `aud` claim; enforced by both the GUI and the REST API (see [Token Audience](#token-audience)). Default: not checked. |
 
-Reference: [Web UI Routes — `GET /login/egi` / `GET /oauth/callback`](api.md#authentication-routes-appauthpy)
+Reference: [pilot-app — Web UI routes, `GET /login/egi` / `GET /oauth/callback`](https://github.com/chbrandt/pilot-app/blob/main/docs/web_ui.md#authentication-routes-appauthpy)
 and [Configuration — `site` section](configuration.md#site-section).
 
 > **Known limitation:** the `charts/manager` Helm chart does not (yet)

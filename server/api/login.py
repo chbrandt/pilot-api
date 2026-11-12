@@ -47,11 +47,11 @@ class _AuthError(Exception):
         self.code = code
 
 
-def _ok(data, code: int = 200):
+def _ok(data, code: int = 200) -> tuple[str, int, dict]:
     return json.dumps(data), code, {"Content-Type": "application/json"}
 
 
-def _err(message: str, code: int = 400):
+def _err(message: str, code: int = 400) -> tuple[str, int, dict]:
     return json.dumps({"error": message}), code, {"Content-Type": "application/json"}
 
 
@@ -99,7 +99,7 @@ def _validate_and_enrich(token: str) -> dict:
 
 
 @login_bp.route("/verify", methods=["POST"])
-def verify_token():
+def verify_token() -> tuple[str, int, dict]:
     """Validate a pasted access token; return claims + namespace."""
     body = request.get_json(silent=True) or {}
     token = body.get("access_token")
@@ -117,7 +117,7 @@ def verify_token():
 
 
 @login_bp.route("/oidc/exchange", methods=["POST"])
-def oidc_exchange():
+def oidc_exchange() -> tuple[str, int, dict]:
     """Exchange an OAuth authorization code (PKCE) for validated credentials."""
     body = request.get_json(silent=True) or {}
     code = body.get("code")

@@ -41,17 +41,17 @@ logger = logging.getLogger(__name__)
 saved_bp = Blueprint("api_saved", __name__, url_prefix="/api")
 
 
-def _ok(data: dict | list, code: int = 200):
+def _ok(data: dict | list, code: int = 200) -> tuple[str, int, dict]:
     return json.dumps(data), code, {"Content-Type": "application/json"}
 
 
-def _err(message: str, code: int = 400):
+def _err(message: str, code: int = 400) -> tuple[str, int, dict]:
     return json.dumps({"error": message}), code, {"Content-Type": "application/json"}
 
 
 @saved_bp.route("/saved/seed", methods=["POST"])
 @require_token
-def seed_saved_defaults():
+def seed_saved_defaults() -> tuple[str, int, dict]:
     """
     Idempotently seed the default configs for the authenticated user.
 
@@ -75,7 +75,7 @@ def seed_saved_defaults():
 
 @saved_bp.route("/saved", methods=["GET"])
 @require_token
-def list_saved():
+def list_saved() -> tuple[str, int, dict]:
     """List the caller's saved configurations, optionally filtered by kind."""
     claims = get_request_claims()
     namespace = claims["namespace"]
@@ -85,7 +85,7 @@ def list_saved():
 
 @saved_bp.route("/saved", methods=["POST"])
 @require_token
-def create_saved():
+def create_saved() -> tuple[str, int, dict]:
     """Persist a new saved configuration for the caller."""
     claims = get_request_claims()
     namespace = claims["namespace"]
@@ -104,7 +104,7 @@ def create_saved():
 
 @saved_bp.route("/saved/<config_id>", methods=["GET"])
 @require_token
-def get_saved(config_id):
+def get_saved(config_id: str) -> tuple[str, int, dict]:
     """Return one saved configuration."""
     claims = get_request_claims()
     namespace = claims["namespace"]
@@ -117,7 +117,7 @@ def get_saved(config_id):
 
 @saved_bp.route("/saved/<config_id>", methods=["DELETE"])
 @require_token
-def delete_saved(config_id):
+def delete_saved(config_id: str) -> tuple[str, int, dict]:
     """Remove one saved configuration."""
     claims = get_request_claims()
     namespace = claims["namespace"]

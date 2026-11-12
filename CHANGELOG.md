@@ -28,6 +28,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Saved-config CRUD**: `GET/POST /api/saved`, `GET/DELETE /api/saved/{id}`
   (complementing the existing `POST /api/saved/seed`).
 
+### Changed
+
+- **Docs**: `docs/api.md` (the Web UI routes reference) moved to the
+  pilot-app repository as `docs/web_ui.md` — the GUI routes no longer
+  live in this service. `docs/rest_api.md` now documents the public
+  endpoints and the saved-config CRUD.
+
 ## [v0.4.1] - 2026-10-13
 
 ### Added
